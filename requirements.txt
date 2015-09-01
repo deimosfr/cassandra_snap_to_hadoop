@@ -1,0 +1,5 @@
+krbcontext >= 0.3.3
+requests >= 2.7.0
+requests-kerberos >= 0.7.0
+pycurl >= 7.19.0
+kerberos >= 1.1.1
