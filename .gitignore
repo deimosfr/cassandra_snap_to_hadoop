@@ -1,1 +1,7 @@
 .idea
+bin/
+centos/
+include/
+lib/
+lib64
+share/
