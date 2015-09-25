@@ -1,0 +1,3 @@
+#!/bin/sh
+cd /usr/share/cassnap2hadoop
+./bin/python /usr/share/cassnap2hadoop cassnap_manage.py
