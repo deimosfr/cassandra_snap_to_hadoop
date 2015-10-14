@@ -19,7 +19,7 @@
 # Todo: ajouter le clear des snapshots
 # Todo: ajouter l'exclusion des
 
-__version__ = 'v0.1'
+__version__ = '0.1'
 
 import argparse
 import sys

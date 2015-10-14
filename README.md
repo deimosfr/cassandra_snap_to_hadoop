@@ -4,7 +4,6 @@ This tool is made to perform Cassandra Snapshot and store them on a Hadoop clust
 
 NOTE: this is currently in development
 
-
 # Install
 
 ## CentOS
@@ -70,3 +69,16 @@ patch the kerberos_.py library as described here:
          _r = response.connection.send(response.request, **kwargs)
          _r.history.append(response)
 ```
+
+# Build sources and RPM
+
+To build dependencies and make an RPM, there is an existing Dockerfile at the root directory of the project.
+You only need to run it to build everything:
+
+```
+docker build -t cass_snap .
+CONTAINER=$(docker run -d -v "`pwd`:/mnt" cass_snap bash -c "cp -Rfv /root/rpmbuild /mnt/")
+docker attach $CONTAINER
+docker rm -f $CONTAINER
+```
+You now have a folder "rpmbuild" with the compiled sources and the RPM.
