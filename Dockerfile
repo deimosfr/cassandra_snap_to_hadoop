@@ -5,7 +5,7 @@ LABEL Description="This image is used to build a Python virtualenv and a RPM"
 
 # Install dev dependencies
 RUN yum -y install epel-release
-RUN yum -y install python python-pip gcc krb5-devel python-devel libcurl-devel python-virtualenv libyaml-devel tar
+RUN yum -y install python python-pip gcc krb5-devel python-devel libcurl-devel python-virtualenv libyaml-devel tar git
 
 # Install rpm prequesites
 RUN yum -y install rpmdevtools
@@ -16,12 +16,12 @@ ADD . /root/cass_snap
 WORKDIR /root/cass_snap
 
 # Build virtualenv
-RUN virtualenv .
-RUN source bin/activate && pip install -r requirements.txt && deactivate
+RUN virtualenv python26
+RUN source python26/bin/activate && pip install -r requirements.txt && deactivate
 
 # Apply patch
 # https://github.com/requests/requests-kerberos/issues/54
-RUN cp patchs/kerberos_.py lib/python2.6/site-packages/requests_kerberos/
+RUN cp patchs/kerberos_.py python26/lib/python2.6/site-packages/requests_kerberos/
 
 # Build RPM from virtualenv
 WORKDIR /root
