@@ -24,7 +24,10 @@ __version__ = '0.1'
 import argparse
 import sys
 import os
-import ConfigParser
+try:
+   import configparser
+except:
+   import ConfigParser as configparser
 import datetime
 import logging
 import requests
@@ -36,7 +39,6 @@ import re
 import subprocess
 import json
 import yaml
-import socket
 
 LVL = {'INFO': logging.INFO,
        'DEBUG': logging.DEBUG,
@@ -224,7 +226,7 @@ class ManageSnapshot:
                   self.logger.debug('Connexion to Hadoop: successful')
                   try_con = 4
 
-            except IndexError, e:
+            except IndexError as e:
                self.logger.critical("Can't connect to Kerberos : %s" % e)
                sys.exit(1)
 
@@ -248,7 +250,7 @@ class ManageSnapshot:
          if r.status_code != 200:
             raise Exception("Failed listing Hadoop directory: " + str(r.status_code))
 
-      except IndexError, e:
+      except IndexError as e:
          self.logger.critical("Can't connect to Kerberos : %s" % e)
          sys.exit(1)
 
@@ -358,7 +360,7 @@ class ManageSnapshot:
          self.logger.info("No metadata files were found")
          return None
 
-      latest = max(all_snaps.iterkeys(), key=(lambda key: all_snaps[key]))
+      latest = max(all_snaps, key=(lambda key: all_snaps[key]))
       self.logger.debug("Latest snapshot on Hadoop is: %s" % latest)
 
       return latest
@@ -375,12 +377,12 @@ class ManageSnapshot:
          config = yaml.load_all(stream)
 
          for line in config:
-            for k,v in line.items():
+            for k,v in list(line.items()):
                if k == 'cluster_name':
                   self.logger.debug("Cluster name found: %s" % v)
                   return v
 
-      except IndexError, e:
+      except IndexError as e:
          self.logger.debug('Cluster name not found, using default one instead')
 
       return 'cassandra_cluster'
@@ -410,7 +412,7 @@ class ManageSnapshot:
                   # Todo: ne pas sortir comme un sauvage, faire une fonction pour exit
                   sys.exit(1)
 
-         except IndexError, e:
+         except IndexError as e:
             self.logger.error(" %s" % e)
             sys.exit(1)
 
@@ -463,7 +465,7 @@ class ManageSnapshot:
             else:
                try_con += 1
 
-         except IndexError, e:
+         except IndexError as e:
             self.logger.error("Could not upload %s: %s" % (table, e))
 
    def _push_tables_to_hadoop(self, tables_list):
@@ -503,7 +505,7 @@ class ManageSnapshot:
       try:
          self.logger.info('Start snapshoting')
          result = subprocess.Popen('nodetool snapshot', shell=True, stdout=subprocess.PIPE)
-      except IndexError, e:
+      except IndexError as e:
          self.logger.critical("Error during snapshot request : %s" % e)
          sys.exit(1)
 
@@ -618,7 +620,7 @@ def main():
    # Read credential file and override by command args
    if os.path.isfile(arg.configuration_file):
       if os.access(arg.configuration_file, os.R_OK):
-         config = ConfigParser.ConfigParser()
+         config = configparser.ConfigParser()
          config.read([str(arg.configuration_file)])
 
          if not arg.kerberos:
