@@ -1,5 +1,7 @@
 # Cassandra Snapshot to Hadoop utility 
 
+[![Build Status](https://travis-ci.org/deimosfr/cassandra_snap_to_hadoop.svg?branch=master)](https://travis-ci.org/deimosfr/cassandra_snap_to_hadoop)
+
 This tool is made to perform Cassandra Snapshot and store them on a Hadoop cluster.
 
 NOTE: this is currently in development
