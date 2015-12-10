@@ -39,6 +39,7 @@ import re
 import subprocess
 import json
 import yaml
+from prettytable import PrettyTable
 
 LVL = {'INFO': logging.INFO,
        'DEBUG': logging.DEBUG,
@@ -236,23 +237,56 @@ class ManageSnapshot:
          print('Could not connect without Kerberos keytab to Hadoop Cluster')
          sys.exit(1)
 
-   def list_snapshots(self):
+   def _ask_hadoop(self, url):
       """
-      List available snapshots from Hadoop
-      """
-      self.logger.info("Listing available Cassandra snapshots")
+      Make a request to Hadoop and return the json result
 
+      :param url: full URL to request to Hadoop cluster
+      :return: dict
+      """
       try:
-         url = ''.join([self.hadoop_url, '/', self.hadoop_dest_dir, '?op=liststatus'])
          self.logger.debug(''.join(['used url: ', url]))
 
          r = self.session.get(url, auth=self.auth)
          if r.status_code != 200:
-            raise Exception("Failed listing Hadoop directory: " + str(r.status_code))
+            raise Exception("Failed to make Hadoop request: " + str(r.status_code))
 
       except IndexError as e:
          self.logger.critical("Can't connect to Kerberos : %s" % e)
          sys.exit(1)
+
+      return json.loads(r._content)
+
+   def list_snapshots(self):
+      """
+      List available snapshots from Hadoop
+      """
+
+      def node_snapshot(url, node_name):
+         """
+         List available snapshot for a specific node
+         :param url: hadoop url to metadata dir node
+         :param node_name: the node name to look on
+         """
+         snapshots_json = self._ask_hadoop(''.join([url, '/', node_name, '?op=liststatus']))
+
+         for s in snapshots_json['FileStatuses']['FileStatus']:
+            snap_date = re.sub('cass_snap_', r'', s['pathSuffix'])
+            all_snapshots.add_row([node_name, snap_date])
+
+      self.logger.info("Listing available Cassandra snapshots")
+
+      # Get list of available Cassandra nodes
+      url = '/'.join([self.hadoop_url, self.hadoop_dest_dir, self.meta_dir, self.cluster_name])
+      nodes_json = self._ask_hadoop(url + '?op=liststatus')
+
+      # Add to the snapshots array the list of snapshots per nodes
+      all_snapshots = PrettyTable(['Nodes', 'Dates'])
+      for s in nodes_json['FileStatuses']['FileStatus']:
+         node_snapshot(url, s['pathSuffix'])
+
+      print(all_snapshots)
+      return
 
    def _get_keyspaces_list(self):
       """
