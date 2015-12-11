@@ -274,7 +274,7 @@ class ManageSnapshot:
             snap_date = re.sub('cass_snap_', r'', s['pathSuffix'])
             all_snapshots.add_row([node_name, snap_date])
 
-      self.logger.info("Listing available Cassandra snapshots")
+      self.logger.info("Listing available Cassandra snapshots on Hadoop cluster")
 
       # Get list of available Cassandra nodes
       url = '/'.join([self.hadoop_url, self.hadoop_dest_dir, self.meta_dir, self.cluster_name])
@@ -489,7 +489,8 @@ class ManageSnapshot:
             #self.logger.debug("Pushing: %s" % url)
 
             if r.status_code == 500:
-               action = self.session.put(r.url, data=file, auth=self.auth, headers=headers)
+               with open(file, 'rb') as f:
+                  action = self.session.put(r.url, data=f, auth=self.auth, headers=headers)
 
                if action.status_code == 201:
                   return True
@@ -571,6 +572,16 @@ class ManageSnapshot:
       self.logger.info('Pushing metadata to hadoop')
       self._hadoop_create_folders(['/'.join([self.meta_dir, self.cluster_name, self.hostname])])
       self._push_file_to_hadoop(snap_file, '/'.join([self.meta_dir, self.cluster_name, self.hostname]))
+
+   def restore_snapshot(self):
+      """
+      Restore snapshot
+      :return:
+      """
+
+class BlankLinesHelpFormatter (argparse.HelpFormatter):
+   def _split_lines(self, text, width):
+      return super()._split_lines(text, width) + ['']
 
 def main():
    """
