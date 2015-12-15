@@ -579,6 +579,141 @@ class ManageSnapshot:
       :return:
       """
 
+   def _delete_file_in_hadoop(self, path):
+      """
+      Delete a file in Hadoop
+      :param path: file path
+      :rtype: bool
+      """
+
+      self.logger.debug('Deleting file {0} in Hadoop'.format(path))
+
+      url = ''.join([self.hadoop_url, self.hadoop_dest_dir, '/', path, '?op=DELETE'])
+      self.logger.debug('used url: {0}'.format(url))
+
+      try_con = 0
+      while try_con < 3:
+         r = self.session.delete(url, auth=self.auth)
+         if r.status_code == 500:
+            action = self.session.delete(r.url, auth=self.auth)
+            if action.status_code == 200:
+               return True
+         else:
+            self.logger.error('Could not delete file {0} : {1}'.format(url, action.status_code))
+         try_con += 1
+
+      if try_con >= 3:
+         self.logger.error('Could not delete file {0}'.format(url))
+
+      return False
+
+   def _get_all_snapshots(self):
+      """
+      Returns all snapshots from Hadoop
+      :rtype: list
+      """
+
+      result = []
+
+      def node_snapshots(url, node_name):
+         """
+         List available snapshots for a specific node
+         :param url: Hadoop url to metadata dir node
+         :param node_name: the node name to look on
+         """
+         snapshots_json = self._ask_hadoop(''.join([url, '/', node_name, '?op=liststatus']))
+         for s in snapshots_json['FileStatuses']['FileStatus']:
+            snap_date = re.sub('cass_snap_', r'', s['pathSuffix'])
+            result.append({'node': node_name, 'date': snap_date})
+
+      # Get list of available Cassandra nodes
+      url = '/'.join([self.hadoop_url, self.hadoop_dest_dir, self.meta_dir, self.cluster_name])
+      nodes_json = self._ask_hadoop(url + '?op=liststatus')
+      for s in nodes_json['FileStatuses']['FileStatus']:
+         node_snapshots(url, s['pathSuffix'])
+
+      return result
+
+   def _is_snapshot_equal(self, snapshot1, snapshot2):
+      """
+      Checks if 2 snapshots are equal
+      :param snapshot1: first snapshot
+      :param snapshot2: second snapshot
+      :rtype: bool
+      """
+      return snapshot1['node'] == snapshot2['node'] and snapshot1['date'] == snapshot2['date']
+
+   def _snapshot_exists(self, snapshot):
+        """
+        Checks if a snaphost exists in Hadoop
+        :param snapshot: snapshot to check existence
+        :rtype: bool
+        """
+        all_snapshots = self._get_all_snapshots()
+        match = filter(lambda x: self._is_snapshot_equal(snapshot, x), all_snapshots)
+
+        return match != []
+
+   def _get_snapshot_metadata(self, snapshot):
+      """
+      Get metadata for a snapshot
+      :param snapshot: snapshot to get metadata
+      :rtype: set
+      """
+      self.logger.debug('Getting metadata for snapshot {0} - {1}'.format(snapshot['node'], snapshot['date']))
+
+      url = ''.join([self.hadoop_url, self.hadoop_dest_dir, '/', self.meta_dir, '/', self.cluster_name, '/',
+                     snapshot['node'], '/', 'cass_snap_', snapshot['date'], '?op=OPEN'])
+
+      self.logger.debug('used url: {0}'.format(url))
+
+      r = self.session.get(url, auth=self.auth)
+
+      if r.status_code == 200:
+         return set(r._content.split('\n'))
+      else:
+         self.logger.warn('Could not get metadata file : {0}'.format(r.status_code))
+         return None
+
+   def flush_snapshot(self, node, date):
+      """
+      Delete a snaphot in Hadoop
+      :param node: Cassandra node, if None then current host
+      :param date: snapshot date
+      :rtype: bool
+       """
+
+      snapshot = {
+         'node': self.hostname if node is None else node,
+         'date': date
+      }
+
+      if not self._snapshot_exists(snapshot):
+          self.logger.error('Snapshot {0} - {1} does not exist'.format(snapshot['node'], snapshot['date']))
+          return False
+
+      self.logger.info('Deleting snapshot {0} - {1}'.format(snapshot['node'], snapshot['date']))
+
+      snap_files = set()
+      all_other_files = set()
+      for item in self._get_all_snapshots():
+         if self._is_snapshot_equal(snapshot, item):
+            snap_files = self._get_snapshot_metadata(item)
+         else:
+            all_other_files = all_other_files.union(self._get_snapshot_metadata(item))
+
+      to_delete_files = snap_files - all_other_files
+
+      for file in to_delete_files:
+         self._delete_file_in_hadoop('/'.join([self.cluster_name, file]))
+
+      self._delete_file_in_hadoop(''.join([self.meta_dir, '/', self.cluster_name, '/', snapshot['node'], '/',
+                                  'cass_snap_', snapshot['date']]))
+
+      self.logger.info('Snapshot {0} - {1} successfully deleted'.format(snapshot['node'], snapshot['date']))
+      return True
+
+
 class BlankLinesHelpFormatter (argparse.HelpFormatter):
    def _split_lines(self, text, width):
       return super()._split_lines(text, width) + ['']
@@ -640,6 +775,10 @@ def main():
    parser.add_argument('-C', '--clear_snapshot', action='store_false', default=False,
                        help='Clear snapshot. If launched with -S option, it will be done after the snapshot transfer'
                             'to Hadoop')
+   parser.add_argument('-F', '--flush_snapshot', action='store', type=str, default=None, metavar='SNAPSHOT',
+                       help='Remove a snapshot on hadoop')
+   parser.add_argument('-N', '--node', action='store', type=str, default=None, metavar='CASSANDRA_NODE',
+                       help='Cassandra node, works with --flush_snapshot')
    parser.add_argument('-D', '--dry_run', action='store_false', default=True,
                        help='Define if it should make snapshot or just dry run')
 
@@ -712,8 +851,10 @@ def main():
                               arg.dry_run)
    if arg.list_snaps:
       operation.list_snapshots()
-   if arg.make_snapshot:
+   elif arg.make_snapshot:
       operation.make_snapshot()
+   elif arg.flush_snapshot:
+      operation.flush_snapshot(arg.node, arg.flush_snapshot)
 
 
 if __name__ == "__main__":
